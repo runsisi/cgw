@@ -1,17 +1,22 @@
-package auth
+package calamari
 
 import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"path/filepath"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
+    "github.com/juju/persistent-cookiejar"
+	"github.com/runsisi/cgw/pkg/utils"
 	"github.com/spf13/cobra"
+	"github.com/runsisi/cgw/pkg/calamari/api"
 )
 
 type Token struct {
@@ -28,8 +33,8 @@ var (
 
 var LoginCmd = &cobra.Command{
 	Use:   "login",
-	Short:  "Login to api backend",
-	Long: "Login to api backend",
+	Short:  "Login to calamari backend",
+	Long: "Login to calamari backend",
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		run(args)
@@ -39,16 +44,37 @@ var LoginCmd = &cobra.Command{
 func init() {
 	flags := LoginCmd.Flags()
 
+	config := api.Config{}
+	apiFlags := api.Flags(&config)
+
+	flags.AddFlagSet(apiFlags)
+
 	// https://tools.ietf.org/html/rfc6454#section-4
-	flags.StringVar(&origin, "origin", "",
-		"host for api backend")
+	flags.StringVarP(&origin, "origin", "o", "",
+		"base url for api backend")
 	LoginCmd.MarkFlagRequired("origin")
 
-	flags.StringVar(&user, "user", "", "user to login")
+	flags.StringVarP(&user, "user", "u", "",
+		"user to login")
 	LoginCmd.MarkFlagRequired("user")
 
-	flags.StringVar(&password, "password",  "", "password for login")
+	flags.StringVarP(&password, "password",  "p", "",
+		"password for login")
 	LoginCmd.MarkFlagRequired("password")
+}
+
+func newCookieJar() *cookiejar.Jar {
+    jarFileDir := filepath.Join(utils.ConfigDir(), "leancloud")
+
+    os.MkdirAll(jarFileDir, 0775)
+
+    jar, err := cookiejar.New(&cookiejar.Options{
+        Filename: filepath.Join(jarFileDir, "cookies"),
+    })
+    if err != nil {
+        panic(err)
+    }
+    return jar
 }
 
 func run(args []string) error {
@@ -59,7 +85,12 @@ func run(args []string) error {
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
-	client := &http.Client{Transport: tr}
+	jar := newCookieJar()
+
+	client := &http.Client{
+	    Transport: tr,
+	    Jar: jar,
+	}
 
 	// login
 	loginUrl := fmt.Sprintf("%s%s", origin, "/api/v1/auth/login")
@@ -93,6 +124,11 @@ func run(args []string) error {
 		return err
 	}
 
+    fmt.Println("After 2nd request:")
+    for _, cookie := range jar.Cookies(loginReq.URL) {
+        fmt.Printf("  %s: %s\n", cookie.Name, cookie.Value)
+    }
+
 	fmt.Println(string(loginBody))
 
 	var authToken Token
@@ -110,8 +146,6 @@ func run(args []string) error {
 		log.Fatal("NewRequest: ", err)
 		return err
 	}
-
-	clusterRequest.Header.Set("X-XSRF-TOKEN", authToken.Token)
 
 	clusterResp, err := client.Do(clusterRequest)
 	if err != nil {

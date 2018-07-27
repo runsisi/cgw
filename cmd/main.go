@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/runsisi/cgw/pkg/auth"
+	"github.com/runsisi/cgw/pkg/calamari"
 )
 
 var (
@@ -13,15 +13,12 @@ var (
 )
 
 func init() {
-	cobra.OnInitialize(initConfig)
+	cobra.OnInitialize()
 
 	flags := rootCmd.Flags()
 	flags.BoolVarP(&version, "version", "v", false, "version")
 
-	rootCmd.AddCommand(auth.LoginCmd)
-}
-
-func initConfig() {
+	rootCmd.AddCommand(calamari.LoginCmd)
 }
 
 var rootCmd = &cobra.Command{
