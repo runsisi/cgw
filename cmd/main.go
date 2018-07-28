@@ -5,40 +5,36 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/runsisi/cgw/pkg/calamari"
+	"github.com/runsisi/cgw/cmd/auth"
+	"github.com/runsisi/cgw/cmd/cluster"
 )
 
 var (
 	version bool
 )
 
-func init() {
-	cobra.OnInitialize()
-
-	flags := rootCmd.Flags()
-	flags.BoolVarP(&version, "version", "v", false, "version")
-
-	rootCmd.AddCommand(calamari.LoginCmd)
-}
-
-var rootCmd = &cobra.Command{
+var cmd = &cobra.Command{
 	Use:  "cgw",
 	Long: "A gateway for ceph cluster.",
 	Args: cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
-		if version {
-			fmt.Println("0.1")
-		}
+		cmd.Help()
 	},
 }
 
-func execute() {
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
+func init() {
+	cobra.OnInitialize()
+
+	flags := cmd.Flags()
+	flags.BoolVarP(&version, "version", "v", false, "version")
+
+	cmd.AddCommand(auth.Cmd)
+	cmd.AddCommand(cluster.Cmd)
 }
 
 func main() {
-    execute()
+	if err := cmd.Execute(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
 }

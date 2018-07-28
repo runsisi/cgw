@@ -1,17 +1,15 @@
 package api
 
 import (
-	"context"
 	"crypto/tls"
+	flag "github.com/spf13/pflag"
 	"log"
 	"net"
-	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/hashicorp/go-cleanhttp"
 	"github.com/hashicorp/go-rootcerts"
 )
 
@@ -57,156 +55,6 @@ const (
 	HTTPSSLVerifyEnvName = "CONSUL_HTTP_SSL_VERIFY"
 )
 
-// QueryOptions are used to parameterize a query
-type QueryOptions struct {
-	// Providing a datacenter overwrites the DC provided
-	// by the Config
-	Datacenter string
-
-	// AllowStale allows any Consul server (non-leader) to service
-	// a read. This allows for lower latency and higher throughput
-	AllowStale bool
-
-	// RequireConsistent forces the read to be fully consistent.
-	// This is more expensive but prevents ever performing a stale
-	// read.
-	RequireConsistent bool
-
-	// WaitIndex is used to enable a blocking query. Waits
-	// until the timeout or the next index is reached
-	WaitIndex uint64
-
-	// WaitHash is used by some endpoints instead of WaitIndex to perform blocking
-	// on state based on a hash of the response rather than a monotonic index.
-	// This is required when the state being blocked on is not stored in Raft, for
-	// example agent-local proxy configuration.
-	WaitHash string
-
-	// WaitTime is used to bound the duration of a wait.
-	// Defaults to that of the Config, but can be overridden.
-	WaitTime time.Duration
-
-	// Token is used to provide a per-request ACL token
-	// which overrides the agent's default token.
-	Token string
-
-	// Near is used to provide a node name that will sort the results
-	// in ascending order based on the estimated round trip time from
-	// that node. Setting this to "_agent" will use the agent's node
-	// for the sort.
-	Near string
-
-	// NodeMeta is used to filter results by nodes with the given
-	// metadata key/value pairs. Currently, only one key/value pair can
-	// be provided for filtering.
-	NodeMeta map[string]string
-
-	// RelayFactor is used in keyring operations to cause responses to be
-	// relayed back to the sender through N other random nodes. Must be
-	// a value from 0 to 5 (inclusive).
-	RelayFactor uint8
-
-	// Connect filters prepared query execution to only include Connect-capable
-	// services. This currently affects prepared query execution.
-	Connect bool
-
-	// ctx is an optional context pass through to the underlying HTTP
-	// request layer. Use Context() and WithContext() to manage this.
-	ctx context.Context
-}
-
-func (o *QueryOptions) Context() context.Context {
-	if o != nil && o.ctx != nil {
-		return o.ctx
-	}
-	return context.Background()
-}
-
-func (o *QueryOptions) WithContext(ctx context.Context) *QueryOptions {
-	o2 := new(QueryOptions)
-	if o != nil {
-		*o2 = *o
-	}
-	o2.ctx = ctx
-	return o2
-}
-
-// WriteOptions are used to parameterize a write
-type WriteOptions struct {
-	// Providing a datacenter overwrites the DC provided
-	// by the Config
-	Datacenter string
-
-	// Token is used to provide a per-request ACL token
-	// which overrides the agent's default token.
-	Token string
-
-	// RelayFactor is used in keyring operations to cause responses to be
-	// relayed back to the sender through N other random nodes. Must be
-	// a value from 0 to 5 (inclusive).
-	RelayFactor uint8
-
-	// ctx is an optional context pass through to the underlying HTTP
-	// request layer. Use Context() and WithContext() to manage this.
-	ctx context.Context
-}
-
-func (o *WriteOptions) Context() context.Context {
-	if o != nil && o.ctx != nil {
-		return o.ctx
-	}
-	return context.Background()
-}
-
-func (o *WriteOptions) WithContext(ctx context.Context) *WriteOptions {
-	o2 := new(WriteOptions)
-	if o != nil {
-		*o2 = *o
-	}
-	o2.ctx = ctx
-	return o2
-}
-
-// QueryMeta is used to return meta data about a query
-type QueryMeta struct {
-	// LastIndex. This can be used as a WaitIndex to perform
-	// a blocking query
-	LastIndex uint64
-
-	// LastContentHash. This can be used as a WaitHash to perform a blocking query
-	// for endpoints that support hash-based blocking. Endpoints that do not
-	// support it will return an empty hash.
-	LastContentHash string
-
-	// Time of last contact from the leader for the
-	// server servicing the request
-	LastContact time.Duration
-
-	// Is there a known leader
-	KnownLeader bool
-
-	// How long did the request take
-	RequestTime time.Duration
-
-	// Is address translation enabled for HTTP responses on this agent
-	AddressTranslationEnabled bool
-}
-
-// WriteMeta is used to return meta data about a write
-type WriteMeta struct {
-	// How long did the request take
-	RequestTime time.Duration
-}
-
-// HttpBasicAuth is used to authenticate http client with HTTP Basic Authentication
-type HttpBasicAuth struct {
-	// Username to use for HTTP Basic Authentication
-	Username string
-
-	// Password to use for HTTP Basic Authentication
-	Password string
-}
-
 // Config is used to configure the creation of a client
 type Config struct {
 	// Address is the address of the Consul server
@@ -215,18 +63,8 @@ type Config struct {
 	// Scheme is the URI scheme for the Consul server
 	Scheme string
 
-	// Datacenter to use. If not provided, the default agent datacenter is used.
-	Datacenter string
-
-	// Transport is the Transport to use for the http client.
-	Transport *http.Transport
-
-	// HttpClient is the client to use. Default will be
-	// used if not provided.
-	HttpClient *http.Client
-
 	// HttpAuth is the auth info to use for http access.
-	HttpAuth *HttpBasicAuth
+	HttpAuth HttpBasicAuth
 
 	// WaitTime limits how long a Watch will block. If not provided,
 	// the agent default values will be used.
@@ -237,6 +75,45 @@ type Config struct {
 	Token string
 
 	TLSConfig TLSConfig
+}
+
+func (c *Config) Flags() *flag.FlagSet {
+	fs := flag.NewFlagSet("", flag.ContinueOnError)
+
+	fs.StringVar(&c.Address, "http-addr", "",
+		"The address and port of the RESTful API backend.")
+	fs.StringVarP(&c.HttpAuth.Username, "user", "u", "",
+		"user to login")
+	fs.StringVarP(&c.HttpAuth.Password, "password",  "p", "",
+		"password for login")
+
+	fs.StringVar(&c.TLSConfig.CAFile, "ca-file", "",
+		"Path to a CA file to use for TLS.")
+	fs.StringVar(&c.TLSConfig.CAPath, "ca-path", "",
+		"Path to a directory of CA certificates.")
+	fs.StringVar(&c.TLSConfig.CertFile, "client-cert", "",
+		"Path to a client cert file to use for TLS.")
+	fs.StringVar(&c.TLSConfig.KeyFile, "client-key", "",
+		"Path to a client key file to use for TLS.")
+	fs.StringVar(&c.TLSConfig.Address, "tls-server-name", "",
+		"The server name to use as the SNI host when connecting via TLS.")
+	fs.BoolVar(&c.TLSConfig.InsecureSkipVerify, "skip-verify", true,
+		"Disable TLS host verification.")
+
+	return fs
+}
+
+func (c *Config) APIClient() (*Client, error) {
+	return NewClient(c)
+}
+
+// HttpBasicAuth is used to authenticate http client with HTTP Basic Authentication
+type HttpBasicAuth struct {
+	// Username to use for HTTP Basic Authentication
+	Username string
+
+	// Password to use for HTTP Basic Authentication
+	Password string
 }
 
 // TLSConfig is used to generate a TLSClientConfig that's useful for talking to
@@ -275,9 +152,8 @@ type TLSConfig struct {
 // time. To avoid this, use the DefaultNonPooledConfig() instead.
 func DefaultConfig() *Config {
 	config := &Config{
-		Address:   "127.0.0.1:8500",
-		Scheme:    "http",
-		Transport: cleanhttp.DefaultPooledTransport(),
+		Address:   "127.0.0.1:8100",
+		Scheme:    "https",
 	}
 
 	if addr := os.Getenv(HTTPAddrEnvName); addr != "" {
@@ -298,7 +174,7 @@ func DefaultConfig() *Config {
 			username = auth
 		}
 
-		config.HttpAuth = &HttpBasicAuth{
+		config.HttpAuth = HttpBasicAuth{
 			Username: username,
 			Password: password,
 		}

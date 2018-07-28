@@ -1,24 +1,11 @@
 package utils
 
 import (
-"os"
-"os/user"
-"path/filepath"
+	"os"
+	"path/filepath"
+
+	"github.com/mitchellh/go-homedir"
 )
-
-// returns the system current user's home directory
-func HomeDir() string {
-    homeDir := os.Getenv("HOME")
-    if homeDir != "" {
-        return homeDir
-    }
-
-    currentUser, err := user.Current()
-    if err != nil {
-        panic(err)
-    }
-    return currentUser.HomeDir
-}
 
 // returns the current user's XDG config dir
 func ConfigDir() string {
@@ -27,5 +14,9 @@ func ConfigDir() string {
         return configDir
     }
 
-    return filepath.Join(HomeDir(), ".config")
+    homeDir, err := homedir.Dir()
+	if err != nil {
+		panic(err)
+	}
+    return filepath.Join(homeDir, ".config")
 }
