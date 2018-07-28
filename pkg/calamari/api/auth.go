@@ -2,7 +2,10 @@ package api
 
 import (
 	"fmt"
+	"log"
 	"time"
+
+	"github.com/juju/persistent-cookiejar"
 )
 
 type Token struct {
@@ -30,9 +33,12 @@ func (a *Auth) Login() error {
 	}
 	_, resp, err := requireOK(a.c.doRequest(r))
 	if err != nil {
+		log.Println(err)
 		return err
 	}
 	defer resp.Body.Close()
+
+	a.c.HttpClient.Jar.(* cookiejar.Jar).Save()
 
 	var token Token
 	if err := decodeBody(resp, &token); err != nil {

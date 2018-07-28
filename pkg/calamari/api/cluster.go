@@ -2,7 +2,8 @@ package api
 
 import (
 	"fmt"
-			)
+	"io/ioutil"
+)
 
 type Cluster struct {
 	c *Client
@@ -23,12 +24,16 @@ func (a *Auth) List() error {
 	}
 	defer resp.Body.Close()
 
-	var clusters string
-	if err := decodeBody(resp, &clusters); err != nil {
+	//var clusters string
+	//if err := decodeBody(resp, &clusters); err != nil {
+	//	return err
+	//}
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
 		return err
 	}
-
-	fmt.Printf("%+v\n", clusters)
+	fmt.Printf("%+v\n", string(body))
 
 	fmt.Println("cookies:")
 	for _, cookie := range a.c.HttpClient.Jar.Cookies(r.url) {

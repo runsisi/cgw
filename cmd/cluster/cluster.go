@@ -1,6 +1,8 @@
 package cluster
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
 	"github.com/runsisi/cgw/pkg/calamari/api"
 )
@@ -34,6 +36,7 @@ func run(args []string) error {
 
 	err = c.Cluster().List()
 	if err != nil {
+		fmt.Println(err)
 		return err
 	}
 

@@ -210,7 +210,9 @@ func requireOK(d time.Duration, resp *http.Response, e error) (time.Duration, *h
 		}
 		return d, nil, e
 	}
-	if resp.StatusCode != 200 {
+
+	// TODO
+	if resp.StatusCode != 200 && resp.StatusCode != 201 {
 		var buf bytes.Buffer
 		io.Copy(&buf, resp.Body)
 		resp.Body.Close()
